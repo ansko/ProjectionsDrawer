@@ -16,6 +16,7 @@ import lat.read_atoms
 
 SCALE = 20
 RADIUS = 5
+WIDTH = 5
 BIG_INT = 1000000
 
 class Atom():
@@ -170,8 +171,17 @@ class MainWidget(QWidget):
         self.molecule = molecule
         self.radius = RADIUS
         self.scale = SCALE
-        x = self.scale * (self.molecule.ranges[1] - self.molecule.ranges[0]) + 2 * self.radius
-        y = self.scale * (self.molecule.ranges[3] - self.molecule.ranges[2]) + 2 * self.radius
+        self.width = WIDTH
+        self.coord1 = coord1
+        self.coord2 = coord2
+        x = (self.scale * (self.molecule.ranges[1] - 
+                           self.molecule.ranges[0]) +
+             2 * self.radius + 
+             self.width)
+        y = (self.scale * (self.molecule.ranges[3] -
+                           self.molecule.ranges[2]) +
+             2 * self.radius + 
+             self.width)
         self.resize(x, y)
         self.takeScreenshot()
 
@@ -183,14 +193,32 @@ class MainWidget(QWidget):
         qp.setBrush(brush)
         qp.setPen(pen)
         for atom in self.molecule.molecule:
-            qp.drawEllipse(QPoint(self.scale * (atom[1] - self.molecule.ranges[0]) + self.radius,
-                                  self.scale * (atom[2] - self.molecule.ranges[2]) + self.radius),
+            qp.drawEllipse(QPoint(self.scale * (atom[1] -
+                                                self.molecule.ranges[0]) +
+                                  self.radius + 
+                                  self.width / 2,
+                                  self.scale * (atom[2] -
+                                                self.molecule.ranges[2]) +
+                                  self.radius + 
+                                  self.width / 2),
                            self.radius, self.radius)
         for bond in self.molecule.bondsInMolecule:
-            qp.drawLine(self.scale * (bond.bondBegin[0] - self.molecule.ranges[0]) + self.radius,
-                        self.scale * (bond.bondBegin[1] - self.molecule.ranges[2]) + self.radius,
-                        self.scale * (bond.bondEnd[0] - self.molecule.ranges[0]) + self.radius,
-                        self.scale * (bond.bondEnd[1] - self.molecule.ranges[2]) + self.radius)
+            qp.drawLine(self.scale * (bond.bondBegin[0] -
+                                      self.molecule.ranges[0]) +
+                        self.radius + 
+                                  self.width / 2,
+                        self.scale * (bond.bondBegin[1] -
+                                      self.molecule.ranges[2]) +
+                        self.radius + 
+                                  self.width / 2,
+                        self.scale * (bond.bondEnd[0] -
+                                      self.molecule.ranges[0]) +
+                        self.radius + 
+                                  self.width / 2,
+                        self.scale * (bond.bondEnd[1] -
+                                      self.molecule.ranges[2]) +
+                        self.radius + 
+                                  self.width / 2)
 
         qp.end()
 
@@ -234,7 +262,9 @@ def main():
         mol.chooseBonds(atomsList, bondsList)
         mol.computeRanges()
 
-        w = MainWidget(mol)
+        w = MainWidget(mol, 1, 2)
+        w = MainWidget(mol, 1, 3)
+        w = MainWidget(mol, 2, 3)
 
     app.quit()
 
