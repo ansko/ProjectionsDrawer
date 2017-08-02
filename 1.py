@@ -25,13 +25,14 @@ class Atom():
                        atomType,
                        atomCharge,
                        x, y, z):
-        self.atomNumber = atomNumber
-        self.atomGroup = atomGroup
-        self.atomType = atomType
-        self.atomCharge = atomCharge
-        self.x = x
-        self.y = y
-        self.z = z
+        self.values = {}
+        self.values['atomNumber'] = atomNumber
+        self.values['atomGroup'] = atomGroup
+        self.values['atomType'] = atomType
+        self.values['atomCharge'] = atomCharge
+        self.values['X'] = x
+        self.values['Y'] = y
+        self.values['Z'] = z
 
 class Bounds():
     def __init__(self, xlo, xhi,
@@ -52,18 +53,26 @@ class Bond():
                        bondType,
                        bondAtomOneNumber,
                        bondAtomTwoNumber):
-        self.bondNumber = bondNumber
-        self.bondType = bondType
-        self.bondAtomOneNumber = bondAtomOneNumber
-        self.bondAtomTwoNumber = bondAtomTwoNumber
+        self.values = {}
+        self.values['bondNumber'] = bondNumber
+        self.values['bondType'] = bondType
+        self.values['bondAtomOneNumber'] = bondAtomOneNumber
+        self.values['bondAtomTwoNumber'] = bondAtomTwoNumber
+        self.values['bondBegin'] = {}
+        self.values['bondEnd'] = {}
 
     def calculateEnds(self, atomsList, molecule):
-        atomsInMolecule = [molecule[i][0] for i in range(len(molecule))]
+        l = len(molecule)
+        atomsInMolecule = [molecule[i].values['atomNumber'] for i in range(l)]
         for atom in molecule:
-            if atom[0] == self.bondAtomOneNumber:
-                self.bondBegin = [atom[1], atom[2], atom[3]]
-            if atom[0] == self.bondAtomTwoNumber:
-                self.bondEnd = [atom[1], atom[2], atom[3]]
+            if atom.values['atomNumber'] == self.values['bondAtomOneNumber']:
+                self.values['bondBegin']['X'] = atom.values['X']
+                self.values['bondBegin']['Y'] = atom.values['Y']
+                self.values['bondBegin']['Z'] = atom.values['Z']
+            if atom.values['atomNumber'] == self.values['bondAtomTwoNumber']:
+                self.values['bondEnd']['X'] = atom.values['X']
+                self.values['bondEnd']['Y'] = atom.values['Y']
+                self.values['bondEnd']['Z'] = atom.values['Z']
 
 class Molecule():
     def __init__(self, moleculeNumber, systemName):
@@ -88,17 +97,23 @@ class Molecule():
         ly = bounds.ly
         lz = bounds.lz
 
-        startX = atomsList[self.startAtomNumber - 1].x
-        startY = atomsList[self.startAtomNumber - 1].y
-        startZ = atomsList[self.startAtomNumber - 1].z
-        molecule.append([self.startAtomNumber, startX, startY, startZ])
+        startX = atomsList[self.startAtomNumber - 1].values['X']
+        startY = atomsList[self.startAtomNumber - 1].values['Y']
+        startZ = atomsList[self.startAtomNumber - 1].values['Z']
+        molecule.append(Atom(self.startAtomNumber,
+                             None,
+                             None,
+                             None,
+                             startX,
+                             startY,
+                             startZ))
 
         startAtomNumber = self.startAtomNumber
         for i in range(self.polymerLength - 1):
             nearestAtomNumber = startAtomNumber + 1
-            nearestAtomX = atomsList[nearestAtomNumber - 1].x
-            nearestAtomY = atomsList[nearestAtomNumber - 1].y
-            nearestAtomZ = atomsList[nearestAtomNumber - 1].z
+            nearestAtomX = atomsList[nearestAtomNumber - 1].values['X']
+            nearestAtomY = atomsList[nearestAtomNumber - 1].values['Y']
+            nearestAtomZ = atomsList[nearestAtomNumber - 1].values['Z']
             r2old = BIG_INT
             coords = [0, 0, 0]
             for x in [-1, 0, 1]:
@@ -114,11 +129,15 @@ class Molecule():
                         if r2new < r2old:
                             r2old = r2new 
                             coords = [x, y, z]
-            if not atomsList[nearestAtomNumber - 1].atomType in self.hydrogenTypes:
-                molecule.append([nearestAtomNumber,
-                                 nearestAtomX + coords[0] * lx,
-                                 nearestAtomY + coords[1] * ly,
-                                 nearestAtomZ + coords[2] * lz])
+            if not (atomsList[nearestAtomNumber - 1].values['atomType'] in
+                    self.hydrogenTypes):
+                molecule.append(Atom(nearestAtomNumber,
+                                     None,
+                                     None,
+                                     None,
+                                     nearestAtomX + coords[0] * lx,
+                                     nearestAtomY + coords[1] * ly,
+                                     nearestAtomZ + coords[2] * lz))
             startAtomNumber = nearestAtomNumber
             startX = nearestAtomX + coords[0] * lx                    
             startY = nearestAtomY + coords[1] * ly        
@@ -128,11 +147,11 @@ class Molecule():
     def chooseBonds(self, atomsList, bondsList):
         """Отбирает те связи, что входят в данную молекулу
            Также проставляет каждой связи координаты концов"""
-        atomsInMolecule = [atom[0] for atom in self.molecule]
+        atomsInMolecule = [atom.values['atomNumber'] for atom in self.molecule]
         bondsInMolecule = []
         for bond in bondsList:
-            if (bond.bondAtomOneNumber in atomsInMolecule and
-                bond.bondAtomTwoNumber in atomsInMolecule):
+            if (bond.values['bondAtomOneNumber'] in atomsInMolecule and
+                bond.values['bondAtomTwoNumber'] in atomsInMolecule):
                 bondsInMolecule.append(bond)
                 bond.calculateEnds(None, self.molecule)
         self.bondsInMolecule = bondsInMolecule
@@ -149,24 +168,29 @@ class Molecule():
         maxZ = -BIG_INT
         minZ = BIG_INT
         for atom in self.molecule:
-            if atom[1] < minX:
-                minX = atom[1]
-            if atom[1] > maxX:
-                maxX = atom[1]
-            if atom[2] < minY:
-                minY = atom[2]
-            if atom[2] > maxY:
-                maxY = atom[2]
-            if atom[3] < minZ:
-                minZ = atom[3]
-            if atom[3] > maxZ:
-                maxZ = atom[3]
-        self.ranges = (minX, maxX, minY, maxY, minZ, maxZ)
+            if atom.values['X'] < minX:
+                minX = atom.values['X']
+            if atom.values['X'] > maxX:
+                maxX = atom.values['X']
+            if atom.values['Y'] < minY:
+                minY = atom.values['Y']
+            if atom.values['Y'] > maxY:
+                maxY = atom.values['Y']
+            if atom.values['Z'] < minZ:
+                minZ = atom.values['Z']
+            if atom.values['Z'] > maxZ:
+                maxZ = atom.values['Z']
+        self.ranges = { 'minX': minX,
+                        'maxX': maxX,
+                        'minY': minY,
+                        'maxY': maxY,
+                        'minZ': minZ,
+                        'maxZ': maxZ }
 
 class MainWidget(QWidget):
     """Рисует молекулу (атомы и связи)"""
     def __init__(self, molecule,
-                       coord1=1, coord2=2):
+                       coord1='X', coord2='Y'):
         super().__init__()
         self.molecule = molecule
         self.radius = RADIUS
@@ -174,12 +198,12 @@ class MainWidget(QWidget):
         self.width = WIDTH
         self.coord1 = coord1
         self.coord2 = coord2
-        x = (self.scale * (self.molecule.ranges[1] - 
-                           self.molecule.ranges[0]) +
+        x = (self.scale * (self.molecule.ranges['max' + self.coord1] - 
+                           self.molecule.ranges['min' + self.coord1]) +
              2 * self.radius + 
              self.width)
-        y = (self.scale * (self.molecule.ranges[3] -
-                           self.molecule.ranges[2]) +
+        y = (self.scale * (self.molecule.ranges['max' + self.coord2] -
+                           self.molecule.ranges['min' + self.coord2]) +
              2 * self.radius + 
              self.width)
         self.resize(x, y)
@@ -192,39 +216,46 @@ class MainWidget(QWidget):
         pen = QPen(brush, 5)
         qp.setBrush(brush)
         qp.setPen(pen)
+        indices = { '1': 'X',
+                    '2': 'Y',
+                    '3': 'Z' }
         for atom in self.molecule.molecule:
-            qp.drawEllipse(QPoint(self.scale * (atom[1] -
-                                                self.molecule.ranges[0]) +
+            qp.drawEllipse(QPoint(self.scale * (atom.values[self.coord1] -
+                                                self.molecule.ranges['min' +
+                                                                     self.coord1]) +
                                   self.radius + 
                                   self.width / 2,
-                                  self.scale * (atom[2] -
-                                                self.molecule.ranges[2]) +
+                                  self.scale * (atom.values[self.coord2] -
+                                                self.molecule.ranges['min' +
+                                                                     self.coord2]) +
                                   self.radius + 
                                   self.width / 2),
                            self.radius, self.radius)
         for bond in self.molecule.bondsInMolecule:
-            qp.drawLine(self.scale * (bond.bondBegin[0] -
-                                      self.molecule.ranges[0]) +
+            qp.drawLine(self.scale * (bond.values['bondBegin'][self.coord1] -
+                                      self.molecule.ranges['min' + self.coord1]) +
                         self.radius + 
                                   self.width / 2,
-                        self.scale * (bond.bondBegin[1] -
-                                      self.molecule.ranges[2]) +
+                        self.scale * (bond.values['bondBegin'][self.coord2] -
+                                      self.molecule.ranges['min' + self.coord2]) +
                         self.radius + 
                                   self.width / 2,
-                        self.scale * (bond.bondEnd[0] -
-                                      self.molecule.ranges[0]) +
+                        self.scale * (bond.values['bondEnd'][self.coord1] -
+                                      self.molecule.ranges['min' + self.coord1]) +
                         self.radius + 
                                   self.width / 2,
-                        self.scale * (bond.bondEnd[1] -
-                                      self.molecule.ranges[2]) +
+                        self.scale * (bond.values['bondEnd'][self.coord2] -
+                                      self.molecule.ranges['min' + self.coord2]) +
                         self.radius + 
                                   self.width / 2)
 
         qp.end()
 
-    def takeScreenshot(self, fname='./1.png', format='png'):
+    def takeScreenshot(self, fname='XY.png', format='png'):
         p = self.grab();
-        p.save(fname, format, -1)
+        self.moleculeNumber = 1
+        fname2 = str(self.moleculeNumber) + self.coord1 + self.coord2 + '.png'
+        p.save(fname2, format, -1)
 
 def main():
     app = QApplication(sys.argv)
@@ -262,9 +293,9 @@ def main():
         mol.chooseBonds(atomsList, bondsList)
         mol.computeRanges()
 
-        w = MainWidget(mol, 1, 2)
-        w = MainWidget(mol, 1, 3)
-        w = MainWidget(mol, 2, 3)
+        w = MainWidget(mol, 'X', 'Y')
+        w = MainWidget(mol, 'X', 'Z')
+        w = MainWidget(mol, 'Y', 'Z')
 
     app.quit()
 
