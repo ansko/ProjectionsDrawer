@@ -18,6 +18,8 @@ SCALE = 20
 RADIUS = 5
 WIDTH = 5
 BIG_INT = 1000000
+SYSTEM_NAME = '10x20'
+PHASE = 'polymer'
 
 class Atom():
     def __init__(self, atomNumber,
@@ -75,19 +77,33 @@ class Bond():
                 self.values['bondEnd']['Z'] = atom.values['Z']
 
 class Molecule():
-    def __init__(self, moleculeNumber, systemName):
-        if systemName == '10x20':
-            self.hydrogenTypes = [12, 13] # Интересен только скелет
+    def __init__(self, moleculeNumber):
+        self.moleculeNumber = moleculeNumber
+        modifiersPerCell = 12
+        modifierLength = 70
+        if SYSTEM_NAME == '10x20':
+            self.hydrogenTypes = [8, 12, 13] # Интересен только скелет
             chainsPerCell = 10
             self.polymerLength = 382
             delta = 1560
             systemSize = 5380
-            cellNumber = moleculeNumber // chainsPerCell
-            inCellNumber = moleculeNumber % chainsPerCell
-            startAtomNumber = (cellNumber * systemSize + 
-                               delta + 
-                               inCellNumber * self.polymerLength) + 1
-            self.startAtomNumber = startAtomNumber
+
+            # for polymer
+            if PHASE == 'polymer':
+                cellNumber = moleculeNumber // chainsPerCell
+                inCellNumber = moleculeNumber % chainsPerCell
+                startAtomNumber = (cellNumber * systemSize + 
+                                   delta + 
+                                   inCellNumber * self.polymerLength) + 1
+            # for modifier
+            elif PHASE == 'modifier':
+                cellNumber = moleculeNumber // modifiersPerCell
+                inCellNumber = moleculeNumber % modifiersPerCell
+                delta = 720
+                startAtomNumber = (cellNumber * systemSize + 
+                                   delta + 
+                                   inCellNumber * modifierLength) + 1
+        self.startAtomNumber = startAtomNumber
 
     def makeSkeleton(self, atomsList, bounds):
         """Формирует скелет цепочки с учётом пересечения границ"""
@@ -97,23 +113,29 @@ class Molecule():
         ly = bounds.ly
         lz = bounds.lz
 
-        startX = atomsList[self.startAtomNumber - 1].values['X']
-        startY = atomsList[self.startAtomNumber - 1].values['Y']
-        startZ = atomsList[self.startAtomNumber - 1].values['Z']
-        molecule.append(Atom(self.startAtomNumber,
-                             None,
-                             None,
-                             None,
-                             startX,
-                             startY,
-                             startZ))
+        num = self.startAtomNumber - 1
+        startX = atomsList[num].values['X']
+        startY = atomsList[num].values['Y']
+        startZ = atomsList[num].values['Z']
+        if not atomsList[num].values['atomType'] in self.hydrogenTypes:
+            molecule.append(Atom(self.startAtomNumber,
+                                 atomsList[num].values['atomGroup'],
+                                 atomsList[num].values['atomType'],
+                                 atomsList[num].values['atomCharge'],
+                                 startX,
+                                 startY,
+                                 startZ))
 
         startAtomNumber = self.startAtomNumber
-        for i in range(self.polymerLength - 1):
-            nearestAtomNumber = startAtomNumber + 1
-            nearestAtomX = atomsList[nearestAtomNumber - 1].values['X']
-            nearestAtomY = atomsList[nearestAtomNumber - 1].values['Y']
-            nearestAtomZ = atomsList[nearestAtomNumber - 1].values['Z']
+        if PHASE == 'polymer': # for polymer
+            l = self.polymerLength - 1
+        elif PHASE == 'modifier': # for modifier
+            l = 69
+        for i in range(l):
+            num = startAtomNumber
+            nearestAtomX = atomsList[num].values['X']
+            nearestAtomY = atomsList[num].values['Y']
+            nearestAtomZ = atomsList[num].values['Z']
             r2old = BIG_INT
             coords = [0, 0, 0]
             for x in [-1, 0, 1]:
@@ -129,16 +151,15 @@ class Molecule():
                         if r2new < r2old:
                             r2old = r2new 
                             coords = [x, y, z]
-            if not (atomsList[nearestAtomNumber - 1].values['atomType'] in
-                    self.hydrogenTypes):
-                molecule.append(Atom(nearestAtomNumber,
-                                     None,
-                                     None,
-                                     None,
+            if not atomsList[num].values['atomType'] in self.hydrogenTypes:
+                molecule.append(Atom(num + 1,
+                                     atomsList[num].values['atomGroup'],
+                                     atomsList[num].values['atomType'],
+                                     atomsList[num].values['atomCharge'],
                                      nearestAtomX + coords[0] * lx,
                                      nearestAtomY + coords[1] * ly,
                                      nearestAtomZ + coords[2] * lz))
-            startAtomNumber = nearestAtomNumber
+            startAtomNumber = num + 1
             startX = nearestAtomX + coords[0] * lx                    
             startY = nearestAtomY + coords[1] * ly        
             startZ = nearestAtomZ + coords[2] * lz
@@ -212,57 +233,69 @@ class MainWidget(QWidget):
     def paintEvent(self, e):
         qp = QPainter()
         qp.begin(self)
-        brush = QBrush(QColor(0, 0, 0), Qt.SolidPattern)
-        pen = QPen(brush, 5)
-        qp.setBrush(brush)
-        qp.setPen(pen)
         indices = { '1': 'X',
                     '2': 'Y',
                     '3': 'Z' }
-        for atom in self.molecule.molecule:
-            qp.drawEllipse(QPoint(self.scale * (atom.values[self.coord1] -
-                                                self.molecule.ranges['min' +
-                                                                     self.coord1]) +
-                                  self.radius + 
-                                  self.width / 2,
-                                  self.scale * (atom.values[self.coord2] -
-                                                self.molecule.ranges['min' +
-                                                                     self.coord2]) +
-                                  self.radius + 
-                                  self.width / 2),
-                           self.radius, self.radius)
+        brush = QBrush(QColor(0, 0, 0), Qt.SolidPattern)
+        pen = QPen(brush, 5)
+        qp.setPen(pen)
+        dxyz = self.molecule.ranges
         for bond in self.molecule.bondsInMolecule:
             qp.drawLine(self.scale * (bond.values['bondBegin'][self.coord1] -
-                                      self.molecule.ranges['min' + self.coord1]) +
+                                      dxyz['min' + self.coord1]) +
                         self.radius + 
                                   self.width / 2,
                         self.scale * (bond.values['bondBegin'][self.coord2] -
-                                      self.molecule.ranges['min' + self.coord2]) +
+                                      dxyz['min' + self.coord2]) +
                         self.radius + 
                                   self.width / 2,
                         self.scale * (bond.values['bondEnd'][self.coord1] -
-                                      self.molecule.ranges['min' + self.coord1]) +
+                                      dxyz['min' + self.coord1]) +
                         self.radius + 
                                   self.width / 2,
                         self.scale * (bond.values['bondEnd'][self.coord2] -
-                                      self.molecule.ranges['min' + self.coord2]) +
+                                      dxyz['min' + self.coord2]) +
                         self.radius + 
                                   self.width / 2)
-
+        for atom in self.molecule.molecule:
+            if SYSTEM_NAME == '10x20':
+                if atom.values['atomType'] in [4, 5, 6, 7, 15]:
+                    brush = QBrush(QColor(255, 0, 0), Qt.SolidPattern)
+                elif atom.values['atomType'] in [9, 16, 17]:
+                    brush = QBrush(QColor(0, 255, 0), Qt.SolidPattern)
+                elif atom.values['atomType'] in [10, 11, 14]:
+                    brush = QBrush(QColor(105, 105, 105), Qt.SolidPattern)
+                else: # неописанные атомы заметного розового цвета
+                    print(atom.values['atomType'])
+                    brush = QBrush(QColor(255, 0, 255), Qt.SolidPattern)
+            qp.setBrush(brush)
+            pen = QPen(brush, 5)
+            qp.setPen(pen)
+            qp.drawEllipse(QPoint(self.scale * (atom.values[self.coord1] -
+                                                dxyz['min' + self.coord1]) +
+                                  self.radius + 
+                                  self.width / 2,
+                                  self.scale * (atom.values[self.coord2] -
+                                                dxyz['min' + self.coord2]) +
+                                  self.radius + 
+                                  self.width / 2),
+                           self.radius, self.radius)
         qp.end()
 
     def takeScreenshot(self, fname='XY.png', format='png'):
         p = self.grab();
-        self.moleculeNumber = 1
-        fname2 = str(self.moleculeNumber) + self.coord1 + self.coord2 + '.png'
+        fname2 = ('pics/' + 
+                  str(self.molecule.moleculeNumber) +
+                  self.coord1 +
+                  self.coord2 +
+                  '.png')
         p.save(fname2, format, -1)
 
 def main():
     app = QApplication(sys.argv)
 
     fname = '/home/anton/DataExamples/10x20.data'
-    if fname == '/home/anton/DataExamples/10x20.data':
-        systemName = '10x20'
+    if SYSTEM_NAME == '10x20':
         moleculeNumber = 90
 
     i = 0
@@ -283,12 +316,15 @@ def main():
         i += 1
         print('Preparing bonds: ', i, ' / ', len(bonds))
         bo = Bond(bond[0], bond[1], bond[2], bond[3])
-        #bo.calculateEnds(atomsList)
         bondsList.append(bo)
     i = 0
-    for i in range(1):
+    if PHASE == 'polymer': # for polymer
+        l = 90
+    elif PHASE == 'modifier': # for modifier
+        l = 108
+    for i in range(l): # for modifier
         print('Preparing molecules: ', i + 1, ' / ', moleculeNumber)
-        mol = Molecule(i, systemName)
+        mol = Molecule(i)
         mol.makeSkeleton(atomsList, bounds)
         mol.chooseBonds(atomsList, bondsList)
         mol.computeRanges()
